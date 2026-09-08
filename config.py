@@ -38,3 +38,16 @@ CHUNK_OVERLAP = 100
 # ─── Retrieval ──────────────────────────────────────────────────────
 # Number of most-relevant chunks to retrieve for each question.
 TOP_K = 5
+
+# ─── LLM Models & Fallback Hierarchy ───────────────────────────────
+# Primary model followed by fallback models in order of priority.
+# If a model encounters 503 high demand, 429 rate limit, or 404 deprecation,
+# the system automatically fails over to the next available model.
+LLM_MODELS = [
+    "gemini-3.6-flash",
+    "gemini-2.5-flash",
+    "gemini-2.0-flash-lite",
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
+]
+

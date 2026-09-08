@@ -16,8 +16,12 @@ load_dotenv()
 
 def get_client():
     """Get Gemini client if a valid API key is present."""
+    load_dotenv(override=True)
     api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key or api_key.strip() == "" or api_key == "your_gemini_api_key_here":
+    if not api_key:
+        return None
+    api_key = api_key.strip().strip("'").strip('"')
+    if not api_key or api_key == "your_gemini_api_key_here":
         return None
     try:
         return genai.Client(api_key=api_key)
@@ -26,10 +30,14 @@ def get_client():
         return None
 
 
+import time
+from config import LLM_MODELS
+
 def generate_answer(context: str, question: str) -> str:
     """
     Send a question to Gemini along with retrieved document context.
-    Returns the model's text response.
+    Attempts generation across a hierarchy of fallback models in case of
+    temporary high demand (503), rate limits (429), or unavailable endpoints.
     """
     client = get_client()
     if not client:
@@ -63,12 +71,26 @@ Question:
 
 Answer:
     """
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-        )
-        return response.text
-    except Exception as e:
-        return f"⚠️ Error generating answer from Gemini API: {str(e)}"
+
+    models_to_try = LLM_MODELS if isinstance(LLM_MODELS, list) and LLM_MODELS else ["gemini-3.6-flash", "gemini-2.5-flash", "gemini-1.5-flash"]
+    errors = []
+
+    for model_name in models_to_try:
+        try:
+            print(f"[llm] Attempting generation with model: {model_name}")
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+            )
+            if response and response.text:
+                return response.text
+        except Exception as e:
+            err_msg = str(e)
+            print(f"[llm] Fallback triggered: Model '{model_name}' failed with error: {err_msg}")
+            errors.append(f"{model_name}: {err_msg}")
+            time.sleep(0.3)  # brief pause before attempting fallback model
+            continue
+
+    return f"⚠️ All Gemini models encountered errors:\n" + "\n".join(f"- {err}" for err in errors)
+
 
